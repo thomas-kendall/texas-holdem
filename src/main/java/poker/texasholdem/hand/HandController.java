@@ -1,12 +1,32 @@
 package poker.texasholdem.hand;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
+import lombok.Getter;
 import poker.texasholdem.bet.BettingRound;
 import poker.texasholdem.cards.CommunityCards;
+import poker.texasholdem.chips.Pot;
 import poker.texasholdem.chips.Pots;
 import poker.texasholdem.deck.Deck;
+import poker.texasholdem.event.AwaitingPlayerActionEvent;
+import poker.texasholdem.event.BetsPulledInEvent;
+import poker.texasholdem.event.BigBlindCollectedEvent;
+import poker.texasholdem.event.FlopDealtEvent;
+import poker.texasholdem.event.HandCompletedEvent;
+import poker.texasholdem.event.HoleCardsDealtEvent;
+import poker.texasholdem.event.PlayerBetEvent;
+import poker.texasholdem.event.PlayerCalledEvent;
+import poker.texasholdem.event.PlayerCheckedEvent;
+import poker.texasholdem.event.PlayerFoldedEvent;
+import poker.texasholdem.event.PlayerRaisedEvent;
+import poker.texasholdem.event.RiverDealtEvent;
+import poker.texasholdem.event.SmallBlindCollectedEvent;
+import poker.texasholdem.event.TexasHoldemEventListener;
+import poker.texasholdem.event.TurnDealtEvent;
 import poker.texasholdem.player.Player;
 import poker.texasholdem.structure.BlindLevel;
 
@@ -18,14 +38,14 @@ public class HandController {
 	private BlindLevel blindLevel;
 
 	private List<Player> players; // first player is the small blind, last player is the button
+	private List<Player> activePlayers; // players that have not folded
 
 	private Deck deck;
 
+	@Getter
 	private Pots pots;
 
 	private BettingRound bettingRound;
-
-	private int currentPlayerIndex; // the index of the player that the action is on
 
 	int currentBet;
 
@@ -33,7 +53,13 @@ public class HandController {
 
 	private CommunityCards communityCards;
 
-	public HandController(BlindLevel blindLevel, List<Player> players) {
+	private HandResult handResult;
+
+	private List<TexasHoldemEventListener> eventListeners;
+
+	private Player currentPlayer;
+
+	public HandController(BlindLevel blindLevel, List<Player> players, Deck deck) {
 		if (players.size() < 2 || players.size() > 10) {
 			throw new RuntimeException("Must have between 2 and 10 players.");
 		}
@@ -41,11 +67,14 @@ public class HandController {
 			throw new RuntimeException("All players must have chips.");
 		}
 
-		this.deck = new Deck();
+		this.eventListeners = new ArrayList<>();
+		this.deck = deck;
 		this.blindLevel = blindLevel;
 		this.players = new ArrayList<>(players);
-		this.pots = new Pots(players);
+		this.activePlayers = new ArrayList<>(players);
+		this.pots = new Pots();
 		communityCards = new CommunityCards();
+		handResult = null;
 
 		// Initialize for preflop
 		this.bettingRound = new BettingRound();
@@ -53,17 +82,32 @@ public class HandController {
 		dealHoleCards();
 		previousBet = 0;
 		currentBet = blindLevel.getBigBlind();
-		currentPlayerIndex = players.size() == 2 ? 1 : 2;
+		currentPlayer = players.size() == 2 ? players.get(1) : players.get(2);
+
+		if (!eventListeners.isEmpty()) {
+			AwaitingPlayerActionEvent e = new AwaitingPlayerActionEvent(currentPlayer);
+			eventListeners.forEach(el -> el.onAwaitingPlayerAction(e));
+		}
+	}
+
+	public HandController(BlindLevel blindLevel, List<Player> players) {
+		this(blindLevel, players, new Deck());
 	}
 
 	public void check(Player player) {
+		validateHandNotComplete();
 		validateCurrentPlayer(player);
 		if (currentBet > 0) {
 			throw new RuntimeException("Checking not allowed when there is a bet.");
 		}
+		if (!eventListeners.isEmpty()) {
+			PlayerCheckedEvent e = new PlayerCheckedEvent(player);
+			eventListeners.forEach(el -> el.onPlayerChecked(e));
+		}
 	}
 
 	public void bet(Player player, int betSize) {
+		validateHandNotComplete();
 		validateCurrentPlayer(player);
 		if (currentBet > 0) {
 			throw new RuntimeException("Betting is not allowed when there is a bet.");
@@ -76,10 +120,17 @@ public class HandController {
 		}
 		int intendedBet = Math.max(betSize, blindLevel.getBigBlind());
 		placeBet(player, intendedBet);
+
+		if (!eventListeners.isEmpty()) {
+			PlayerBetEvent e = new PlayerBetEvent(player, betSize);
+			eventListeners.forEach(el -> el.onPlayerBet(e));
+		}
+
 		onPlayerActionCompleted();
 	}
 
 	public void call(Player player) {
+		validateHandNotComplete();
 		validateCurrentPlayer(player);
 		if (currentBet == 0) {
 			throw new RuntimeException("Calling not allowed when there is not a bet.");
@@ -88,11 +139,19 @@ public class HandController {
 			throw new RuntimeException("Insufficient chip stack.");
 		}
 		int intendedBet = currentBet;
+		int actualBet = Math.min(intendedBet, player.getChipStack().getChips());
 		placeBet(player, intendedBet);
+
+		if (!eventListeners.isEmpty()) {
+			PlayerCalledEvent e = new PlayerCalledEvent(player, actualBet);
+			eventListeners.forEach(el -> el.onPlayerCalled(e));
+		}
+
 		onPlayerActionCompleted();
 	}
 
 	public void raise(Player player, int betSize) {
+		validateHandNotComplete();
 		validateCurrentPlayer(player);
 		if (currentBet == 0) {
 			throw new RuntimeException("Raising is not allowed when there is a bet.");
@@ -105,14 +164,51 @@ public class HandController {
 		}
 		int intendedBet = Math.max(betSize, getMinimumRaiseBetSize());
 		placeBet(player, intendedBet);
+
+		if (!eventListeners.isEmpty()) {
+			PlayerRaisedEvent e = new PlayerRaisedEvent(player, betSize);
+			eventListeners.forEach(el -> el.onPlayerRaised(e));
+		}
+
 		onPlayerActionCompleted();
 	}
 
 	public void fold(Player player) {
+		validateHandNotComplete();
 		validateCurrentPlayer(player);
-		players.remove(player);
-		pots.removeEligiblePlayerFromAllPots(player);
+		activePlayers.remove(player);
+
+		if (!eventListeners.isEmpty()) {
+			PlayerFoldedEvent e = new PlayerFoldedEvent(player);
+			eventListeners.forEach(el -> el.onPlayerFolded(e));
+		}
+
 		onPlayerActionCompleted();
+	}
+
+	/**
+	 * @return the amount of additional chips the current player must place in order
+	 *         to call
+	 */
+	public int getCurrentPlayerCallAmount() {
+		validateHandNotComplete();
+		return currentBet - bettingRound.getPlacedBet(currentPlayer);
+	}
+
+	/**
+	 * @return the minimum bet size for a raise
+	 */
+	public int getMinimumRaiseBetSize() {
+		validateHandNotComplete();
+		return 2 * currentBet - previousBet;
+	}
+
+	public void addEventListener(TexasHoldemEventListener listener) {
+		eventListeners.add(listener);
+	}
+
+	public void removeEventListener(TexasHoldemEventListener listener) {
+		eventListeners.remove(listener);
 	}
 
 	private void onPlayerActionCompleted() {
@@ -121,45 +217,88 @@ public class HandController {
 		if (isBettingRoundComplete()) {
 			// Pull in the bets
 			pots.pullInBets(bettingRound);
-			bettingRound = new BettingRound();
 
-			if (players.size() == 1) {
-				// TODO: The hand is over, declare the result
+			if (!eventListeners.isEmpty()) {
+				BetsPulledInEvent e = new BetsPulledInEvent(pots.getPots());
+				eventListeners.forEach(el -> el.onBetsPulledIn(e));
+			}
+
+			if (activePlayers.size() == 1 || communityCards.getCards().size() == 5) {
+				// The hand is over, declare the result
+				onHandComplete();
 			} else if (communityCards.getCards().isEmpty()) {
 				// Deal the flop
-				communityCards.addCard(deck.draw());
-				communityCards.addCard(deck.draw());
-				communityCards.addCard(deck.draw());
-				currentPlayerIndex = 0;
+				dealFlop();
+				bettingRound = new BettingRound();
+				previousBet = 0;
+				currentBet = 0;
+				currentPlayer = activePlayers.get(0);
+
+				if (!eventListeners.isEmpty()) {
+					AwaitingPlayerActionEvent e = new AwaitingPlayerActionEvent(currentPlayer);
+					eventListeners.forEach(el -> el.onAwaitingPlayerAction(e));
+				}
 			} else if (communityCards.getCards().size() == 3) {
 				// Deal the turn
-				communityCards.addCard(deck.draw());
-				currentPlayerIndex = 0;
+				dealTurn();
+				bettingRound = new BettingRound();
+				previousBet = 0;
+				currentBet = 0;
+				currentPlayer = activePlayers.get(0);
+
+				if (!eventListeners.isEmpty()) {
+					AwaitingPlayerActionEvent e = new AwaitingPlayerActionEvent(currentPlayer);
+					eventListeners.forEach(el -> el.onAwaitingPlayerAction(e));
+				}
 			} else if (communityCards.getCards().size() == 4) {
 				// Deal the river
-				communityCards.addCard(deck.draw());
-				currentPlayerIndex = 0;
+				dealRiver();
+				bettingRound = new BettingRound();
+				previousBet = 0;
+				currentBet = 0;
+				currentPlayer = activePlayers.get(0);
+
+				if (!eventListeners.isEmpty()) {
+					AwaitingPlayerActionEvent e = new AwaitingPlayerActionEvent(currentPlayer);
+					eventListeners.forEach(el -> el.onAwaitingPlayerAction(e));
+				}
 			} else {
-				// TODO: The hand is over, declare the result
+				throw new RuntimeException("Invalid state, should never reach this point.");
 			}
 		} else {
 			// Action is on the next player
-			currentPlayerIndex++;
-			if (currentPlayerIndex >= players.size()) {
-				currentPlayerIndex = 0;
+			setNextPlayer();
+
+			if (!eventListeners.isEmpty()) {
+				AwaitingPlayerActionEvent e = new AwaitingPlayerActionEvent(currentPlayer);
+				eventListeners.forEach(el -> el.onAwaitingPlayerAction(e));
 			}
+		}
+	}
+
+	private void setNextPlayer() {
+		int i = players.indexOf(currentPlayer) + 1;
+		while (true) {
+			if (i == players.size()) {
+				i = 0;
+			}
+			if (activePlayers.contains(players.get(i))) {
+				currentPlayer = players.get(i);
+				break;
+			}
+			i++;
 		}
 	}
 
 	private boolean isBettingRoundComplete() {
 		// Is there only one player left?
-		if (players.size() == 1) {
+		if (activePlayers.size() == 1) {
 			return true;
 		}
 
 		// Is there any player that has not put in the bet amount?
 		if (currentBet > 0) {
-			for (Player player : players) {
+			for (Player player : activePlayers) {
 				if (player.hasChips() && bettingRound.getPlacedBet(player) < currentBet) {
 					return false;
 				}
@@ -167,7 +306,7 @@ public class HandController {
 			return true;
 		} else {
 			// Did it check around?
-			if (currentPlayerIndex == players.size() - 1) {
+			if (currentPlayer.equals(activePlayers.get(activePlayers.size() - 1))) {
 				return true;
 			} else {
 				// Nobody has bet yet, but not everyone has acted
@@ -176,27 +315,14 @@ public class HandController {
 		}
 	}
 
-	/**
-	 * @return the amount of additional chips the current player must place in order
-	 *         to call
-	 */
-	public int getCurrentPlayerCallAmount() {
-		return currentBet - bettingRound.getPlacedBet(getCurrentPlayer());
-	}
-
-	/**
-	 * @return the minimum bet size for a raise
-	 */
-	public int getMinimumRaiseBetSize() {
-		return 2 * currentBet - previousBet;
-	}
-
-	private Player getCurrentPlayer() {
-		return players.get(currentPlayerIndex);
+	private void validateHandNotComplete() {
+		if (handResult != null) {
+			throw new RuntimeException("Hand is complete.");
+		}
 	}
 
 	private void validateCurrentPlayer(Player player) {
-		if (!player.equals(getCurrentPlayer())) {
+		if (!player.equals(currentPlayer)) {
 			throw new RuntimeException("Incorrect player.");
 		}
 	}
@@ -212,6 +338,10 @@ public class HandController {
 		int chips = Math.min(blindLevel.getSmallBlind(), smallBlindPlayer.getChipStack().getChips());
 		bettingRound.placeBet(smallBlindPlayer, chips);
 		smallBlindPlayer.getChipStack().removeChips(chips);
+		if (!eventListeners.isEmpty()) {
+			SmallBlindCollectedEvent e = new SmallBlindCollectedEvent(smallBlindPlayer, chips);
+			eventListeners.forEach(el -> el.onSmallBlindCollected(e));
+		}
 	}
 
 	private void collectBigBlind() {
@@ -219,6 +349,10 @@ public class HandController {
 		int chips = Math.min(blindLevel.getBigBlind(), bigBlindPlayer.getChipStack().getChips());
 		bettingRound.placeBet(bigBlindPlayer, chips);
 		bigBlindPlayer.getChipStack().removeChips(chips);
+		if (!eventListeners.isEmpty()) {
+			BigBlindCollectedEvent e = new BigBlindCollectedEvent(bigBlindPlayer, chips);
+			eventListeners.forEach(el -> el.onBigBlindCollected(e));
+		}
 	}
 
 	private void dealHoleCards() {
@@ -226,6 +360,40 @@ public class HandController {
 			for (Player player : players) {
 				player.getHoleCards().addCard(deck.draw());
 			}
+		}
+
+		if (!eventListeners.isEmpty()) {
+			HoleCardsDealtEvent e = new HoleCardsDealtEvent();
+			eventListeners.forEach(el -> el.onHoleCardsDealt(e));
+		}
+	}
+
+	private void dealFlop() {
+		communityCards.addCard(deck.draw());
+		communityCards.addCard(deck.draw());
+		communityCards.addCard(deck.draw());
+
+		if (!eventListeners.isEmpty()) {
+			FlopDealtEvent e = new FlopDealtEvent(communityCards.getCards());
+			eventListeners.forEach(el -> el.onFlopDealt(e));
+		}
+	}
+
+	private void dealTurn() {
+		communityCards.addCard(deck.draw());
+
+		if (!eventListeners.isEmpty()) {
+			TurnDealtEvent e = new TurnDealtEvent(communityCards.getCards().get(3));
+			eventListeners.forEach(el -> el.onTurnDealt(e));
+		}
+	}
+
+	private void dealRiver() {
+		communityCards.addCard(deck.draw());
+
+		if (!eventListeners.isEmpty()) {
+			RiverDealtEvent e = new RiverDealtEvent(communityCards.getCards().get(4));
+			eventListeners.forEach(el -> el.onRiverDealt(e));
 		}
 	}
 
@@ -265,6 +433,58 @@ public class HandController {
 			this.previousBet = this.currentBet;
 			this.currentBet = intendedBet;
 		}
+	}
+
+	private void onHandComplete() {
+		// Build the hand result
+		List<PotResult> potResults = new ArrayList<>();
+		for (Pot pot : pots.getPots()) {
+			if (pot.getSize() > 0) {
+				List<Player> potWinners = getWinners(pot);
+				if (potWinners.size() == 1) {
+					potResults.add(new PotResult(pot.getName(), potWinners.get(0), pot.getSize()));
+				} else {
+					// Split the pot among the winners
+					List<Integer> winnings = new ArrayList<>();
+					int chipsPerWinner = pot.getSize() / potWinners.size();
+					int chipsLeftOver = pot.getSize() % potWinners.size();
+					for (int i = 0; i < potWinners.size(); i++) {
+						int chips = chipsPerWinner;
+						if (chipsLeftOver > 0) {
+							chips++;
+							chipsLeftOver--;
+						}
+						winnings.add(chips);
+					}
+					for (int i = 0; i < potWinners.size(); i++) {
+						potResults.add(new PotResult(pot.getName(), potWinners.get(i), winnings.get(i)));
+					}
+				}
+			}
+		}
+
+		this.handResult = new HandResult(potResults);
+
+		if (!eventListeners.isEmpty()) {
+			HandCompletedEvent e = new HandCompletedEvent(this.handResult);
+			eventListeners.forEach(el -> el.onHandCompleted(e));
+		}
+	}
+
+	private List<Player> getWinners(Pot pot) {
+		List<Player> eligibleWinners = intersection(activePlayers, pot.getPlayers());
+		if (eligibleWinners.size() == 1) {
+			return eligibleWinners;
+		} else {
+			Map<Player, Hand> hands = eligibleWinners.stream()
+					.collect(Collectors.toMap(p -> p, p -> Hand.of(communityCards, p.getHoleCards())));
+			Hand winningHand = hands.values().stream().sorted(Comparator.reverseOrder()).findFirst().get();
+			return eligibleWinners.stream().filter(p -> hands.get(p).compareTo(winningHand) == 0).toList();
+		}
+	}
+
+	private List<Player> intersection(List<Player> list1, List<Player> list2) {
+		return list1.stream().filter(p -> list2.contains(p)).toList();
 	}
 
 }

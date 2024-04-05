@@ -1,7 +1,6 @@
 package poker.texasholdem.chips;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -13,29 +12,16 @@ public class Pot {
 	@Getter
 	private String name; // "Main Pot", "Side Pot #1", etc.
 
-	@Getter
-	private List<Player> eligiblePlayers;
-
 	private Map<Player, Integer> playerContributions;
 
 	@Getter
 	private int maxContribution; // 0 means no max
 
-	public Pot(String name, Collection<Player> eligiblePlayers) {
+	public Pot(String name) {
 		super();
 		this.name = name;
-		this.eligiblePlayers = new ArrayList<>(eligiblePlayers);
 		this.playerContributions = new HashMap<>();
 		this.maxContribution = 0;
-	}
-
-	public void removeEligiblePlayer(Player player) {
-		if (eligiblePlayers.contains(player)) {
-			if (eligiblePlayers.size() == 1) {
-				throw new RuntimeException("The last eligible player cannot be removed from the pot.");
-			}
-			eligiblePlayers.remove(player);
-		}
 	}
 
 	public int getSize() {
@@ -55,5 +41,9 @@ public class Pot {
 			throw new RuntimeException("Cannot set max contribution without any contributions present.");
 		}
 		this.maxContribution = playerContributions.values().stream().mapToInt(Integer::intValue).max().getAsInt();
+	}
+
+	public List<Player> getPlayers() {
+		return new ArrayList<>(playerContributions.keySet());
 	}
 }
