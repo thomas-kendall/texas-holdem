@@ -5,6 +5,9 @@ import java.util.List;
 import java.util.Random;
 import java.util.Stack;
 
+/**
+ * Represents a 52-card deck that has been randomly shuffled.
+ */
 public class Deck {
 
 	private Stack<Card> cards;
