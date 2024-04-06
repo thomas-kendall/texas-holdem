@@ -251,7 +251,7 @@ public class HandController {
 				previousBet = 0;
 				currentBet = 0;
 				currentPlayer = null;
-				setNextPlayer();
+				setNextCurrentPlayer();
 
 				if (!eventListeners.isEmpty()) {
 					AwaitingPlayerActionEvent e = new AwaitingPlayerActionEvent(currentPlayer);
@@ -264,7 +264,7 @@ public class HandController {
 				previousBet = 0;
 				currentBet = 0;
 				currentPlayer = null;
-				setNextPlayer();
+				setNextCurrentPlayer();
 				if (currentPlayer == null) {
 					dealRiver();
 					onHandComplete();
@@ -281,7 +281,7 @@ public class HandController {
 				previousBet = 0;
 				currentBet = 0;
 				currentPlayer = null;
-				setNextPlayer();
+				setNextCurrentPlayer();
 				if (currentPlayer == null) {
 					onHandComplete();
 				} else {
@@ -296,7 +296,7 @@ public class HandController {
 			}
 		} else {
 			// Action is on the next player
-			setNextPlayer();
+			setNextCurrentPlayer();
 			if (currentPlayer == null) {
 				// No more action, finish dealing the hand
 				if (communityCards.getCards().size() == 0) {
@@ -319,22 +319,21 @@ public class HandController {
 	}
 
 	/**
-	 * Set the currentPlayer to the next player.
+	 * Set the currentPlayer to the next player, or null if there is no action left
+	 * to be had.
 	 */
-	private void setNextPlayer() {
-		int i = currentPlayer == null ? -1 : players.indexOf(currentPlayer);
-		int playersToCheck = currentPlayer == null ? players.size() : players.size() - 1;
-		currentPlayer = null;
-		for (int j = 0; j < playersToCheck; j++) {
-			i++;
-			if (i == players.size()) {
-				i = 0;
-			}
-			if (activePlayers.contains(players.get(i)) && players.get(i).hasChips()) {
-				currentPlayer = players.get(i);
+	private void setNextCurrentPlayer() {
+		List<Player> activePlayersInOrder = currentPlayer == null
+				? activePlayersInOrder = intersection(players, activePlayers)
+				: intersection(getOtherPlayersRelativeToPlayer(currentPlayer), activePlayers);
+
+		for (Player player : activePlayersInOrder) {
+			if (player.hasChips()) {
+				currentPlayer = player;
 				break;
 			}
 		}
+
 		// If currentPlayer is still null, we did not find a next player, meaning there
 		// is no action left for the hand
 	}
@@ -534,5 +533,21 @@ public class HandController {
 
 	private List<Player> intersection(List<Player> list1, List<Player> list2) {
 		return list1.stream().filter(p -> list2.contains(p)).toList();
+	}
+
+	private List<Player> getOtherPlayersRelativeToPlayer(Player player) {
+		List<Player> others = new ArrayList<>();
+
+		int i = players.indexOf(player);
+		int playersToCheck = players.size() - 1;
+		for (int j = 0; j < playersToCheck; j++) {
+			i++;
+			if (i == players.size()) {
+				i = 0;
+			}
+			others.add(players.get(i));
+		}
+
+		return others;
 	}
 }
