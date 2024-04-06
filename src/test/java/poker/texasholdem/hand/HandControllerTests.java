@@ -1,5 +1,8 @@
 package poker.texasholdem.hand;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -47,6 +50,14 @@ public class HandControllerTests {
 		controller.raise(mp, 76);
 		controller.call(sb);
 		// all in, so no more action
+		// turn dealt
+		// river dealt
+		// hand complete
+		HandResult result = controller.getHandResult();
+		assertNotNull(result);
+		assertEquals(1, result.getPotResults().size());
+		assertEquals(mp, result.getPotResults().get(0).getPlayer());
+		assertEquals(202, result.getPotResults().get(0).getChipsWon());
 	}
 
 	private Deck setupDeck(CommunityCards communityCards, List<HoleCards> holeCardsList) {

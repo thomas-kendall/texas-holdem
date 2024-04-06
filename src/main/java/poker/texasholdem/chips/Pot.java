@@ -33,7 +33,8 @@ public class Pot {
 	}
 
 	public void contribute(Player player, int chips) {
-		playerContributions.put(player, chips);
+		int totalContribution = chips + getPlayerContribution(player);
+		playerContributions.put(player, totalContribution);
 	}
 
 	public void setMaxContribution() {

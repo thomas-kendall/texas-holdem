@@ -53,6 +53,7 @@ public class HandController {
 
 	private CommunityCards communityCards;
 
+	@Getter
 	private HandResult handResult;
 
 	private List<TexasHoldemEventListener> eventListeners;
@@ -82,11 +83,28 @@ public class HandController {
 		dealHoleCards();
 		previousBet = 0;
 		currentBet = blindLevel.getBigBlind();
-		currentPlayer = players.size() == 2 ? players.get(1) : players.get(2);
 
-		if (!eventListeners.isEmpty()) {
-			AwaitingPlayerActionEvent e = new AwaitingPlayerActionEvent(currentPlayer);
-			eventListeners.forEach(el -> el.onAwaitingPlayerAction(e));
+		// If there is less than two players that have chips, then we just deal the
+		// whole hand
+		if (players.stream().filter(p -> p.hasChips()).count() < 2) {
+			pots.pullInBets(bettingRound);
+
+			if (!eventListeners.isEmpty()) {
+				BetsPulledInEvent e = new BetsPulledInEvent(pots.getPots());
+				eventListeners.forEach(el -> el.onBetsPulledIn(e));
+			}
+
+			dealFlop();
+			dealTurn();
+			dealRiver();
+			onHandComplete();
+		} else {
+			currentPlayer = players.size() == 2 ? players.get(1) : players.get(2);
+
+			if (!eventListeners.isEmpty()) {
+				AwaitingPlayerActionEvent e = new AwaitingPlayerActionEvent(currentPlayer);
+				eventListeners.forEach(el -> el.onAwaitingPlayerAction(e));
+			}
 		}
 	}
 
@@ -232,7 +250,8 @@ public class HandController {
 				bettingRound = new BettingRound();
 				previousBet = 0;
 				currentBet = 0;
-				currentPlayer = activePlayers.get(0);
+				currentPlayer = null;
+				setNextPlayer();
 
 				if (!eventListeners.isEmpty()) {
 					AwaitingPlayerActionEvent e = new AwaitingPlayerActionEvent(currentPlayer);
@@ -244,11 +263,16 @@ public class HandController {
 				bettingRound = new BettingRound();
 				previousBet = 0;
 				currentBet = 0;
-				currentPlayer = activePlayers.get(0);
-
-				if (!eventListeners.isEmpty()) {
-					AwaitingPlayerActionEvent e = new AwaitingPlayerActionEvent(currentPlayer);
-					eventListeners.forEach(el -> el.onAwaitingPlayerAction(e));
+				currentPlayer = null;
+				setNextPlayer();
+				if (currentPlayer == null) {
+					dealRiver();
+					onHandComplete();
+				} else {
+					if (!eventListeners.isEmpty()) {
+						AwaitingPlayerActionEvent e = new AwaitingPlayerActionEvent(currentPlayer);
+						eventListeners.forEach(el -> el.onAwaitingPlayerAction(e));
+					}
 				}
 			} else if (communityCards.getCards().size() == 4) {
 				// Deal the river
@@ -256,11 +280,16 @@ public class HandController {
 				bettingRound = new BettingRound();
 				previousBet = 0;
 				currentBet = 0;
-				currentPlayer = activePlayers.get(0);
+				currentPlayer = null;
+				setNextPlayer();
+				if (currentPlayer == null) {
+					onHandComplete();
+				} else {
 
-				if (!eventListeners.isEmpty()) {
-					AwaitingPlayerActionEvent e = new AwaitingPlayerActionEvent(currentPlayer);
-					eventListeners.forEach(el -> el.onAwaitingPlayerAction(e));
+					if (!eventListeners.isEmpty()) {
+						AwaitingPlayerActionEvent e = new AwaitingPlayerActionEvent(currentPlayer);
+						eventListeners.forEach(el -> el.onAwaitingPlayerAction(e));
+					}
 				}
 			} else {
 				throw new RuntimeException("Invalid state, should never reach this point.");
@@ -268,6 +297,19 @@ public class HandController {
 		} else {
 			// Action is on the next player
 			setNextPlayer();
+			if (currentPlayer == null) {
+				// No more action, finish dealing the hand
+				if (communityCards.getCards().size() == 0) {
+					dealFlop();
+				}
+				if (communityCards.getCards().size() == 3) {
+					dealTurn();
+				}
+				if (communityCards.getCards().size() == 4) {
+					dealRiver();
+				}
+				onHandComplete();
+			}
 
 			if (!eventListeners.isEmpty()) {
 				AwaitingPlayerActionEvent e = new AwaitingPlayerActionEvent(currentPlayer);
@@ -276,18 +318,25 @@ public class HandController {
 		}
 	}
 
+	/**
+	 * Set the currentPlayer to the next player.
+	 */
 	private void setNextPlayer() {
-		int i = players.indexOf(currentPlayer) + 1;
-		while (true) {
+		int i = currentPlayer == null ? -1 : players.indexOf(currentPlayer);
+		int playersToCheck = currentPlayer == null ? players.size() : players.size() - 1;
+		currentPlayer = null;
+		for (int j = 0; j < playersToCheck; j++) {
+			i++;
 			if (i == players.size()) {
 				i = 0;
 			}
-			if (activePlayers.contains(players.get(i))) {
+			if (activePlayers.contains(players.get(i)) && players.get(i).hasChips()) {
 				currentPlayer = players.get(i);
 				break;
 			}
-			i++;
 		}
+		// If currentPlayer is still null, we did not find a next player, meaning there
+		// is no action left for the hand
 	}
 
 	private boolean isBettingRoundComplete() {
@@ -486,5 +535,4 @@ public class HandController {
 	private List<Player> intersection(List<Player> list1, List<Player> list2) {
 		return list1.stream().filter(p -> list2.contains(p)).toList();
 	}
-
 }
