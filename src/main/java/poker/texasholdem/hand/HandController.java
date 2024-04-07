@@ -511,6 +511,12 @@ public class HandController {
 			}
 		}
 
+		// Move chips to winners
+		for (PotResult potResult : potResults) {
+			potResult.getPlayer().getChipStack().addChips(potResult.getChipsWon());
+		}
+
+		// Set the hand result
 		this.handResult = new HandResult(potResults);
 
 		if (!eventListeners.isEmpty()) {

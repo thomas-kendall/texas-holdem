@@ -54,10 +54,17 @@ public class HandControllerTests {
 		// river dealt
 		// hand complete
 		HandResult result = controller.getHandResult();
+
 		assertNotNull(result);
 		assertEquals(1, result.getPotResults().size());
 		assertEquals(mp, result.getPotResults().get(0).getPlayer());
 		assertEquals(202, result.getPotResults().get(0).getChipsWon());
+
+		assertEquals(0, sb.getChipStack().getChips());
+		assertEquals(98, bb.getChipStack().getChips());
+		assertEquals(202, mp.getChipStack().getChips());
+		assertEquals(100, co.getChipStack().getChips());
+		assertEquals(100, btn.getChipStack().getChips());
 	}
 
 	@Test
@@ -77,12 +84,16 @@ public class HandControllerTests {
 		// river dealt
 		// hand complete
 		HandResult result = controller.getHandResult();
+
 		assertNotNull(result);
 		assertEquals(2, result.getPotResults().size());
 		assertEquals(sb, result.getPotResults().get(0).getPlayer());
 		assertEquals(200, result.getPotResults().get(0).getChipsWon());
 		assertEquals(bb, result.getPotResults().get(1).getPlayer());
 		assertEquals(100, result.getPotResults().get(1).getChipsWon());
+
+		assertEquals(200, sb.getChipStack().getChips());
+		assertEquals(800, bb.getChipStack().getChips());
 	}
 
 	@Test
@@ -102,10 +113,14 @@ public class HandControllerTests {
 		// river dealt
 		// hand complete
 		HandResult result = controller.getHandResult();
+
 		assertNotNull(result);
 		assertEquals(1, result.getPotResults().size());
 		assertEquals(sb, result.getPotResults().get(0).getPlayer());
 		assertEquals(200, result.getPotResults().get(0).getChipsWon());
+
+		assertEquals(1000, sb.getChipStack().getChips());
+		assertEquals(0, bb.getChipStack().getChips());
 	}
 
 	private Deck setupDeck(CommunityCards communityCards, List<HoleCards> holeCardsList) {
