@@ -60,6 +60,54 @@ public class HandControllerTests {
 		assertEquals(202, result.getPotResults().get(0).getChipsWon());
 	}
 
+	@Test
+	public void test_allInInTheBlindsSB() {
+		Player sb = new Player("SB", 100);
+		Player bb = new Player("BB", 900);
+		List<HoleCards> holeCardsList = new ArrayList<>();
+		// When heads up, sb and bb are in reverse order
+		holeCardsList.add(CardSerializer.toHoleCards("7h", "2c")); // BB
+		holeCardsList.add(CardSerializer.toHoleCards("Js", "Jd")); // SB
+		CommunityCards communityCards = CardSerializer.toCommunityCards("Td", "6h", "5c", "4s", "Th");
+		Deck deck = setupDeck(communityCards, holeCardsList);
+		HandController controller = new HandController(new BlindLevel(200, 100), Arrays.asList(bb, sb), deck);
+		// all in, so no more action
+		// flop dealt
+		// turn dealt
+		// river dealt
+		// hand complete
+		HandResult result = controller.getHandResult();
+		assertNotNull(result);
+		assertEquals(2, result.getPotResults().size());
+		assertEquals(sb, result.getPotResults().get(0).getPlayer());
+		assertEquals(200, result.getPotResults().get(0).getChipsWon());
+		assertEquals(bb, result.getPotResults().get(1).getPlayer());
+		assertEquals(100, result.getPotResults().get(1).getChipsWon());
+	}
+
+	@Test
+	public void test_allInInTheBlindsBB() {
+		Player sb = new Player("SB", 900);
+		Player bb = new Player("BB", 100);
+		List<HoleCards> holeCardsList = new ArrayList<>();
+		// When heads up, sb and bb are in reverse order
+		holeCardsList.add(CardSerializer.toHoleCards("7h", "2c")); // BB
+		holeCardsList.add(CardSerializer.toHoleCards("Js", "Jd")); // SB
+		CommunityCards communityCards = CardSerializer.toCommunityCards("Td", "6h", "5c", "4s", "Th");
+		Deck deck = setupDeck(communityCards, holeCardsList);
+		HandController controller = new HandController(new BlindLevel(200, 100), Arrays.asList(bb, sb), deck);
+		// all in, so no more action
+		// flop dealt
+		// turn dealt
+		// river dealt
+		// hand complete
+		HandResult result = controller.getHandResult();
+		assertNotNull(result);
+		assertEquals(1, result.getPotResults().size());
+		assertEquals(sb, result.getPotResults().get(0).getPlayer());
+		assertEquals(200, result.getPotResults().get(0).getChipsWon());
+	}
+
 	private Deck setupDeck(CommunityCards communityCards, List<HoleCards> holeCardsList) {
 		Deck source = new Deck();
 		Stack<Card> target = new Stack<>();
