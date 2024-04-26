@@ -22,20 +22,23 @@ public class UserService implements IUserService {
 		usersByEmail = new HashMap<>();
 
 		User user = new User();
+		user.setName("Thomas");
 		user.setEmail("thomas.j.kendall@gmail.com");
 		user.addRole(Role.ADMIN);
 		user.addRole(Role.PLAYER);
 		saveUser(user);
 
 		user = new User();
+		user.setName("Zak");
 		user.setEmail("stonewall.kendall@gmail.com");
 		user.addRole(Role.PLAYER);
 		saveUser(user);
 
-		user = new User();
-		user.setEmail("zylerkendall@gmail.com");
-		user.addRole(Role.PLAYER);
-		saveUser(user);
+//		user = new User();
+//		user.setName("Zy");
+//		user.setEmail("zylerkendall@gmail.com");
+//		user.addRole(Role.PLAYER);
+//		saveUser(user);
 	}
 
 	@Override
@@ -45,7 +48,13 @@ public class UserService implements IUserService {
 		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 		if (authentication != null) {
 			OAuth2AuthenticatedPrincipal principal = (OAuth2AuthenticatedPrincipal) authentication.getPrincipal();
-			currentUser = getUser(principal.getAttribute("email"));
+			String email = principal.getAttribute("email");
+			currentUser = getUser(email);
+			if (currentUser == null) {
+				// The user has not been added to the system, so return a user with no roles
+				currentUser = new User();
+				currentUser.setEmail(email);
+			}
 		}
 
 		return currentUser;
@@ -53,7 +62,7 @@ public class UserService implements IUserService {
 
 	@Override
 	public List<User> getUsers() {
-		return usersByEmail.values().stream().sorted(Comparator.comparing(User::getEmail)).toList();
+		return usersByEmail.values().stream().sorted(Comparator.comparing(User::getName)).toList();
 	}
 
 	@Override
