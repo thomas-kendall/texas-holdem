@@ -15,7 +15,7 @@ import poker.texasholdem.cards.HoleCards;
 import poker.texasholdem.deck.Card;
 import poker.texasholdem.deck.Deck;
 import poker.texasholdem.player.Player;
-import poker.texasholdem.structure.BlindLevel;
+import poker.texasholdem.structure.Blinds;
 import poker.texasholdem.utility.CardSerializer;
 import poker.texasholdem.utility.PotAssertions;
 
@@ -36,7 +36,7 @@ public class HandControllerTests {
 		holeCardsList.add(CardSerializer.toHoleCards("8c", "6d")); // BTN
 		CommunityCards communityCards = CardSerializer.toCommunityCards("Td", "6h", "5c", "4s", "Th");
 		Deck deck = setupDeck(communityCards, holeCardsList);
-		HandController controller = new HandController(new BlindLevel(2, 1), Arrays.asList(sb, bb, mp, co, btn), deck);
+		HandController controller = new HandController(new Blinds(2, 1), Arrays.asList(sb, bb, mp, co, btn), deck);
 		controller.raise(mp, 6);
 		controller.fold(co);
 		controller.fold(btn);
@@ -77,7 +77,7 @@ public class HandControllerTests {
 		holeCardsList.add(CardSerializer.toHoleCards("Js", "Jd")); // SB
 		CommunityCards communityCards = CardSerializer.toCommunityCards("Td", "6h", "5c", "4s", "Th");
 		Deck deck = setupDeck(communityCards, holeCardsList);
-		HandController controller = new HandController(new BlindLevel(200, 100), Arrays.asList(bb, sb), deck);
+		HandController controller = new HandController(new Blinds(200, 100), Arrays.asList(bb, sb), deck);
 		// all in, so no more action
 		// flop dealt
 		// turn dealt
@@ -106,7 +106,7 @@ public class HandControllerTests {
 		holeCardsList.add(CardSerializer.toHoleCards("Js", "Jd")); // SB
 		CommunityCards communityCards = CardSerializer.toCommunityCards("Td", "6h", "5c", "4s", "Th");
 		Deck deck = setupDeck(communityCards, holeCardsList);
-		HandController controller = new HandController(new BlindLevel(200, 100), Arrays.asList(bb, sb), deck);
+		HandController controller = new HandController(new Blinds(200, 100), Arrays.asList(bb, sb), deck);
 		// all in, so no more action
 		// flop dealt
 		// turn dealt

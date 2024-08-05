@@ -28,14 +28,14 @@ import poker.texasholdem.event.SmallBlindCollectedEvent;
 import poker.texasholdem.event.TexasHoldemEventListener;
 import poker.texasholdem.event.TurnDealtEvent;
 import poker.texasholdem.player.Player;
-import poker.texasholdem.structure.BlindLevel;
+import poker.texasholdem.structure.Blinds;
 
 /**
  * Controls the playing of a single hand
  */
 public class HandController {
 
-	private BlindLevel blindLevel;
+	private Blinds blinds;
 
 	private List<Player> players; // first player is the small blind, last player is the button
 	private List<Player> activePlayers; // players that have not folded
@@ -60,7 +60,7 @@ public class HandController {
 
 	private Player currentPlayer;
 
-	public HandController(BlindLevel blindLevel, List<Player> players, Deck deck) {
+	public HandController(Blinds blinds, List<Player> players, Deck deck) {
 		if (players.size() < 2 || players.size() > 10) {
 			throw new RuntimeException("Must have between 2 and 10 players.");
 		}
@@ -70,7 +70,7 @@ public class HandController {
 
 		this.eventListeners = new ArrayList<>();
 		this.deck = deck;
-		this.blindLevel = blindLevel;
+		this.blinds = blinds;
 		this.players = new ArrayList<>(players);
 		this.activePlayers = new ArrayList<>(players);
 		this.pots = new Pots();
@@ -82,7 +82,7 @@ public class HandController {
 		collectBlinds();
 		dealHoleCards();
 		previousBet = 0;
-		currentBet = blindLevel.getBigBlind();
+		currentBet = blinds.getBigBlind();
 
 		// If there is less than two players that have chips, then we just deal the
 		// whole hand
@@ -91,7 +91,7 @@ public class HandController {
 
 			if (!eventListeners.isEmpty()) {
 				BetsPulledInEvent e = new BetsPulledInEvent(pots.getPots());
-				eventListeners.forEach(el -> el.onBetsPulledIn(e));
+				eventListeners.forEach(el -> el.onBetsPulledIn(this, e));
 			}
 
 			dealFlop();
@@ -103,13 +103,13 @@ public class HandController {
 
 			if (!eventListeners.isEmpty()) {
 				AwaitingPlayerActionEvent e = new AwaitingPlayerActionEvent(currentPlayer);
-				eventListeners.forEach(el -> el.onAwaitingPlayerAction(e));
+				eventListeners.forEach(el -> el.onAwaitingPlayerAction(this, e));
 			}
 		}
 	}
 
-	public HandController(BlindLevel blindLevel, List<Player> players) {
-		this(blindLevel, players, new Deck());
+	public HandController(Blinds blinds, List<Player> players) {
+		this(blinds, players, new Deck());
 	}
 
 	public void check(Player player) {
@@ -120,7 +120,7 @@ public class HandController {
 		}
 		if (!eventListeners.isEmpty()) {
 			PlayerCheckedEvent e = new PlayerCheckedEvent(player);
-			eventListeners.forEach(el -> el.onPlayerChecked(e));
+			eventListeners.forEach(el -> el.onPlayerChecked(this, e));
 		}
 	}
 
@@ -133,15 +133,15 @@ public class HandController {
 		if (getTotalChips(player) < betSize) {
 			throw new RuntimeException("Insufficient chip stack.");
 		}
-		if (betSize < blindLevel.getBigBlind() && getTotalChips(player) > betSize) {
+		if (betSize < blinds.getBigBlind() && getTotalChips(player) > betSize) {
 			throw new RuntimeException("Invalid bet size.");
 		}
-		int intendedBet = Math.max(betSize, blindLevel.getBigBlind());
+		int intendedBet = Math.max(betSize, blinds.getBigBlind());
 		placeBet(player, intendedBet);
 
 		if (!eventListeners.isEmpty()) {
 			PlayerBetEvent e = new PlayerBetEvent(player, betSize);
-			eventListeners.forEach(el -> el.onPlayerBet(e));
+			eventListeners.forEach(el -> el.onPlayerBet(this, e));
 		}
 
 		onPlayerActionCompleted();
@@ -162,7 +162,7 @@ public class HandController {
 
 		if (!eventListeners.isEmpty()) {
 			PlayerCalledEvent e = new PlayerCalledEvent(player, actualBet);
-			eventListeners.forEach(el -> el.onPlayerCalled(e));
+			eventListeners.forEach(el -> el.onPlayerCalled(this, e));
 		}
 
 		onPlayerActionCompleted();
@@ -185,7 +185,7 @@ public class HandController {
 
 		if (!eventListeners.isEmpty()) {
 			PlayerRaisedEvent e = new PlayerRaisedEvent(player, betSize);
-			eventListeners.forEach(el -> el.onPlayerRaised(e));
+			eventListeners.forEach(el -> el.onPlayerRaised(this, e));
 		}
 
 		onPlayerActionCompleted();
@@ -198,7 +198,7 @@ public class HandController {
 
 		if (!eventListeners.isEmpty()) {
 			PlayerFoldedEvent e = new PlayerFoldedEvent(player);
-			eventListeners.forEach(el -> el.onPlayerFolded(e));
+			eventListeners.forEach(el -> el.onPlayerFolded(this, e));
 		}
 
 		onPlayerActionCompleted();
@@ -238,7 +238,7 @@ public class HandController {
 
 			if (!eventListeners.isEmpty()) {
 				BetsPulledInEvent e = new BetsPulledInEvent(pots.getPots());
-				eventListeners.forEach(el -> el.onBetsPulledIn(e));
+				eventListeners.forEach(el -> el.onBetsPulledIn(this, e));
 			}
 
 			if (activePlayers.size() == 1 || communityCards.getCards().size() == 5) {
@@ -255,7 +255,7 @@ public class HandController {
 
 				if (!eventListeners.isEmpty()) {
 					AwaitingPlayerActionEvent e = new AwaitingPlayerActionEvent(currentPlayer);
-					eventListeners.forEach(el -> el.onAwaitingPlayerAction(e));
+					eventListeners.forEach(el -> el.onAwaitingPlayerAction(this, e));
 				}
 			} else if (communityCards.getCards().size() == 3) {
 				// Deal the turn
@@ -271,7 +271,7 @@ public class HandController {
 				} else {
 					if (!eventListeners.isEmpty()) {
 						AwaitingPlayerActionEvent e = new AwaitingPlayerActionEvent(currentPlayer);
-						eventListeners.forEach(el -> el.onAwaitingPlayerAction(e));
+						eventListeners.forEach(el -> el.onAwaitingPlayerAction(this, e));
 					}
 				}
 			} else if (communityCards.getCards().size() == 4) {
@@ -288,7 +288,7 @@ public class HandController {
 
 					if (!eventListeners.isEmpty()) {
 						AwaitingPlayerActionEvent e = new AwaitingPlayerActionEvent(currentPlayer);
-						eventListeners.forEach(el -> el.onAwaitingPlayerAction(e));
+						eventListeners.forEach(el -> el.onAwaitingPlayerAction(this, e));
 					}
 				}
 			} else {
@@ -313,7 +313,7 @@ public class HandController {
 
 			if (!eventListeners.isEmpty()) {
 				AwaitingPlayerActionEvent e = new AwaitingPlayerActionEvent(currentPlayer);
-				eventListeners.forEach(el -> el.onAwaitingPlayerAction(e));
+				eventListeners.forEach(el -> el.onAwaitingPlayerAction(this, e));
 			}
 		}
 	}
@@ -383,23 +383,23 @@ public class HandController {
 
 	private void collectSmallBlind() {
 		Player smallBlindPlayer = players.size() == 2 ? players.get(1) : players.get(0);
-		int chips = Math.min(blindLevel.getSmallBlind(), smallBlindPlayer.getChipStack().getChips());
+		int chips = Math.min(blinds.getSmallBlind(), smallBlindPlayer.getChipStack().getChips());
 		bettingRound.placeBet(smallBlindPlayer, chips);
 		smallBlindPlayer.getChipStack().removeChips(chips);
 		if (!eventListeners.isEmpty()) {
 			SmallBlindCollectedEvent e = new SmallBlindCollectedEvent(smallBlindPlayer, chips);
-			eventListeners.forEach(el -> el.onSmallBlindCollected(e));
+			eventListeners.forEach(el -> el.onSmallBlindCollected(this, e));
 		}
 	}
 
 	private void collectBigBlind() {
 		Player bigBlindPlayer = players.size() == 2 ? players.get(0) : players.get(1);
-		int chips = Math.min(blindLevel.getBigBlind(), bigBlindPlayer.getChipStack().getChips());
+		int chips = Math.min(blinds.getBigBlind(), bigBlindPlayer.getChipStack().getChips());
 		bettingRound.placeBet(bigBlindPlayer, chips);
 		bigBlindPlayer.getChipStack().removeChips(chips);
 		if (!eventListeners.isEmpty()) {
 			BigBlindCollectedEvent e = new BigBlindCollectedEvent(bigBlindPlayer, chips);
-			eventListeners.forEach(el -> el.onBigBlindCollected(e));
+			eventListeners.forEach(el -> el.onBigBlindCollected(this, e));
 		}
 	}
 
@@ -412,7 +412,7 @@ public class HandController {
 
 		if (!eventListeners.isEmpty()) {
 			HoleCardsDealtEvent e = new HoleCardsDealtEvent();
-			eventListeners.forEach(el -> el.onHoleCardsDealt(e));
+			eventListeners.forEach(el -> el.onHoleCardsDealt(this, e));
 		}
 	}
 
@@ -423,7 +423,7 @@ public class HandController {
 
 		if (!eventListeners.isEmpty()) {
 			FlopDealtEvent e = new FlopDealtEvent(communityCards.getCards());
-			eventListeners.forEach(el -> el.onFlopDealt(e));
+			eventListeners.forEach(el -> el.onFlopDealt(this, e));
 		}
 	}
 
@@ -432,7 +432,7 @@ public class HandController {
 
 		if (!eventListeners.isEmpty()) {
 			TurnDealtEvent e = new TurnDealtEvent(communityCards.getCards().get(3));
-			eventListeners.forEach(el -> el.onTurnDealt(e));
+			eventListeners.forEach(el -> el.onTurnDealt(this, e));
 		}
 	}
 
@@ -441,7 +441,7 @@ public class HandController {
 
 		if (!eventListeners.isEmpty()) {
 			RiverDealtEvent e = new RiverDealtEvent(communityCards.getCards().get(4));
-			eventListeners.forEach(el -> el.onRiverDealt(e));
+			eventListeners.forEach(el -> el.onRiverDealt(this, e));
 		}
 	}
 
@@ -521,7 +521,7 @@ public class HandController {
 
 		if (!eventListeners.isEmpty()) {
 			HandCompletedEvent e = new HandCompletedEvent(this.handResult);
-			eventListeners.forEach(el -> el.onHandCompleted(e));
+			eventListeners.forEach(el -> el.onHandCompleted(this, e));
 		}
 	}
 

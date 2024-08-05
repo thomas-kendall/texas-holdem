@@ -1,32 +1,34 @@
 package poker.texasholdem.event;
 
+import poker.texasholdem.hand.HandController;
+
 public interface TexasHoldemEventListener {
 
-	void onSmallBlindCollected(SmallBlindCollectedEvent e);
+	void onSmallBlindCollected(HandController handController, SmallBlindCollectedEvent e);
 
-	void onBigBlindCollected(BigBlindCollectedEvent e);
+	void onBigBlindCollected(HandController handController, BigBlindCollectedEvent e);
 
-	void onHoleCardsDealt(HoleCardsDealtEvent e);
+	void onHoleCardsDealt(HandController handController, HoleCardsDealtEvent e);
 
-	void onAwaitingPlayerAction(AwaitingPlayerActionEvent e);
+	void onAwaitingPlayerAction(HandController handController, AwaitingPlayerActionEvent e);
 
-	void onPlayerChecked(PlayerCheckedEvent e);
+	void onPlayerChecked(HandController handController, PlayerCheckedEvent e);
 
-	void onPlayerBet(PlayerBetEvent e);
+	void onPlayerBet(HandController handController, PlayerBetEvent e);
 
-	void onPlayerCalled(PlayerCalledEvent e);
+	void onPlayerCalled(HandController handController, PlayerCalledEvent e);
 
-	void onPlayerRaised(PlayerRaisedEvent e);
+	void onPlayerRaised(HandController handController, PlayerRaisedEvent e);
 
-	void onPlayerFolded(PlayerFoldedEvent e);
+	void onPlayerFolded(HandController handController, PlayerFoldedEvent e);
 
-	void onBetsPulledIn(BetsPulledInEvent e);
+	void onBetsPulledIn(HandController handController, BetsPulledInEvent e);
 
-	void onFlopDealt(FlopDealtEvent e);
+	void onFlopDealt(HandController handController, FlopDealtEvent e);
 
-	void onTurnDealt(TurnDealtEvent e);
+	void onTurnDealt(HandController handController, TurnDealtEvent e);
 
-	void onRiverDealt(RiverDealtEvent e);
+	void onRiverDealt(HandController handController, RiverDealtEvent e);
 
-	void onHandCompleted(HandCompletedEvent e);
+	void onHandCompleted(HandController handController, HandCompletedEvent e);
 }
